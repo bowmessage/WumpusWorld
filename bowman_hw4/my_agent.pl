@@ -29,11 +29,6 @@ init_agent:-
 %             The five parameters are either 'yes' or 'no'.
 
 run_agent(Percept, Action):-
-  format('\n=====================================================\n'),
-  format('This is run_agent(.,.):\n\t It gets called each time step.\n\tThis default one simply moves forward\n'),
-  format('You might find "display_world" useful, for your debugging.\n'),
-  display_world,   
-  format('=====================================================\n\n'),
 
   add_percepts(Percept),
 
@@ -41,10 +36,19 @@ run_agent(Percept, Action):-
 
   agent_x(X), agent_y(Y),
 
-  format('I think Im at ~d, ~d\n',X,Y),
+  format('Im at: ~d ~d\n',[X,Y]),
+
+  %format('I think Im at ~d, ~d\n',X,Y),
   display_world.
 
 add_percepts([Stench,Breeze,Glitter,Bump,Scream]):-
+	revert(stench(_,X,Y)),
+	revert(breeze(_,X,Y)),
+	revert(glitter(_,X,Y)),
+	revert(bump(_,X,Y)),
+	revert(scream(_,X,Y)),
+
+
 	assert(stench(Stench,X,Y)),
 	assert(breeze(Breeze,X,Y)),
 	assert(glitter(Glitter,X,Y)),
@@ -57,7 +61,7 @@ add_percepts([Stench,Breeze,Glitter,Bump,Scream]):-
 %   Action is one of:
 %     goforward: move one square along current orientation if possible
 %     turnleft:  turn left 90 degrees
-%     turnright: turn right 90 degrees
+%     turnright: turn right 90 degreesS
 %     grab:      pickup gold if in square
 %     shoot:     shoot an arrow along orientation, killing wumpus if
 %                in that direction
@@ -67,6 +71,15 @@ add_percepts([Stench,Breeze,Glitter,Bump,Scream]):-
 %   Percept = [Stench,Breeze,Glitter,Bump,Scream]
 %             The five parameters are either 'yes' or 'no'.
 
+update_position(turnleft):-
+	retract(agent_ang(A)),
+	NewA is A + 90,
+	assert(agent_ang(NewA)).
+
+update_position(turnright):-
+	retract(agent_ang(A)),
+	NewA is A - 90,
+	assert(agent_ang(NewA)).
 
 update_position(goforward):-
 	agent_ang(A),
@@ -74,8 +87,8 @@ update_position(goforward):-
 	retract(agent_x(X)),
   	retract(agent_y(Y)),
 
-	NewX is X + cos(A/pi*2),
-	NewY is Y + sin(A/pi*2),
+	NewX is X + round(cos(A/pi*2)),
+	NewY is Y + round(sin(A/pi*2)),
 
 	assert(agent_x(NewX)), 
   	assert(agent_y(NewY)).
