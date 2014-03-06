@@ -11,15 +11,16 @@
 %
 % This is what should be fleshed out
 
-:- dynamic agent_x/1, agent_y/1, agent_ang/1, breeze/3, stench/3, glitter/3, bump/3, scream/3.
+:- dynamic agent_x/1, agent_y/1, agent_ang/1, agent_gold/1, breeze/3, stench/3, glitter/3, bump/3, scream/3.
 
 init_agent:-
-  format('\n=====================================================\n'),
-  format('This is init_agent:\n\tIt gets called once, use it for your initialization\n\n'),
-  format('=====================================================\n\n'),
-  assert(agent_x(1)),
-  assert(agent_y(1)),
-  assert(agent_ang(0)).
+	format('\n=====================================================\n'),
+	format('This is init_agent:\n\tIt gets called once, use it for your initialization\n\n'),
+	format('=====================================================\n\n'),
+	assert(agent_x(1)),
+	assert(agent_y(1)),
+	assert(agent_gold(0)),
+	assert(agent_ang(0)).
 
 
 %run_agent(Percept,Action):-
@@ -30,24 +31,82 @@ init_agent:-
 
 run_agent(Percept, Action):-
 
-  add_percepts(Percept),
+	agent_x(X), agent_y(Y), agent_ang(A),
 
-  update_position(Action),
+	format('Im at: ~d ~d, angle ~d\n',[X,Y,A]),
 
-  agent_x(X), agent_y(Y),
+	update_percepts(Percept),
 
-  format('Im at: ~d ~d\n',[X,Y]),
+	get_action(Action),
 
-  %format('I think Im at ~d, ~d\n',X,Y),
-  display_world.
+	update_position(Action),
 
-add_percepts([Stench,Breeze,Glitter,Bump,Scream]):-
-	revert(stench(_,X,Y)),
-	revert(breeze(_,X,Y)),
-	revert(glitter(_,X,Y)),
-	revert(bump(_,X,Y)),
-	revert(scream(_,X,Y)),
+	
 
+	%format('I think Im at ~d, ~d\n',X,Y),
+	display_world.
+	
+
+get_action(grab):-
+	agent_x(X), agent_y(Y), glitter(yes,X,Y).
+
+get_action(climb):-
+	agent_x(X), agent_y(Y), agent_gold(G),
+	X == 1, Y == 1, G > 0.
+
+get_action(shoot):-
+	\+scream(yes,_,_), %no scream yet anywhere. Wumpus is still around!
+	agent_x(X), agent_y(Y).
+
+get_action(goforward):-
+	agent_x(X), agent_y(Y), agent_ang(A),
+
+	NewX is X + round(cos((A/360)*(pi*2))),
+	NewY is Y + round(sin((A/360)*(pi*2))),
+
+	safe(NewX, NewY),  format('it is!\n'), valid(NewX,NewY), format('it is!\n').
+
+get_action(turnleft):- true.
+
+safe(X,Y):-
+	format('Is ~d, ~d safe?\n', [X,Y]),
+	X1 is X + 1,
+	X0 is X - 1,
+	Y1 is Y + 1,
+	Y0 is Y - 1,
+	(
+		\+( breeze(yes,X1,Y) ;
+		breeze(yes,X0,Y) ;
+		breeze(yes,X,Y1) ;
+		breeze(yes,X,Y0) )
+		;
+		breeze(_,X,Y)
+	).
+
+/*
+neighbor(X,Y, List):-
+	valid(X+1, Y) -> List is [[X+1,Y]|List],
+	valid(X-1, Y) -> List is [[X-1,Y]|List],
+	valid(X, Y+1) -> List is [[X,Y+1]|List],
+	valid(X, Y-1) -> List is [[X,Y-1]|List].
+
+neighbor(X,Y, []):-
+	neighbor(X,Y,[[X+1,Y]]).
+*/
+valid(X,Y):-
+	format('valid checking ~d ~d \n',[X,Y]),
+	X > 0, X < 5, Y > 0, Y < 5.
+
+update_percepts([Stench,Breeze,Glitter,Bump,Scream]):-
+	format('[~a,~a,~a,~a,~a]',[Stench,Breeze,Glitter,Bump,Scream]),
+
+	agent_x(X), agent_y(Y),
+
+	retractall(stench(_,X,Y)),
+	retractall(breeze(_,X,Y)),
+	retractall(glitter(_,X,Y)),
+	retractall(bump(_,X,Y)),
+	%don't retract screams.. once it happens anywhere we don't want anymore shooting.
 
 	assert(stench(Stench,X,Y)),
 	assert(breeze(Breeze,X,Y)),
@@ -71,6 +130,12 @@ add_percepts([Stench,Breeze,Glitter,Bump,Scream]):-
 %   Percept = [Stench,Breeze,Glitter,Bump,Scream]
 %             The five parameters are either 'yes' or 'no'.
 
+update_position(grab):-
+	agent_x(X), agent_y(Y), glitter(yes,X,Y),
+	retract(agent_gold(G)),
+	NewG is G + 1,
+	assert(agent_gold(NewG)).
+
 update_position(turnleft):-
 	retract(agent_ang(A)),
 	NewA is A + 90,
@@ -87,8 +152,8 @@ update_position(goforward):-
 	retract(agent_x(X)),
   	retract(agent_y(Y)),
 
-	NewX is X + round(cos(A/pi*2)),
-	NewY is Y + round(sin(A/pi*2)),
+	NewX is X + round(cos((A/360)*(pi*2))),
+	NewY is Y + round(sin((A/360)*(pi*2))),
 
 	assert(agent_x(NewX)), 
   	assert(agent_y(NewY)).
