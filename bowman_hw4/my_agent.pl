@@ -13,6 +13,7 @@
 
 :- dynamic agent_x/1, agent_y/1, agent_ang/1, agent_arrow/1, agent_gold/1, breeze/3, stench/3, glitter/3, bump/3, scream/3.
 
+
 init_agent:-
 	retractall(agent_x(_)),
 	retractall(agent_y(_)),
@@ -48,7 +49,7 @@ run_agent(Percept, Action):-
 
 	update_percepts(Percept),
 
-	get_action(Action),!,
+	get_action(Action),
 
 	update_position(Action),
 
