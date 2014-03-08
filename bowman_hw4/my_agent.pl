@@ -1,18 +1,30 @@
-%my_agent.pl
+% my_agent.pl
 
-%   this procedure requires the external definition of two procedures:
-%
-%     init_agent: called after new world is initialized.  should perform
-%                 any needed agent initialization.
-%
-%     run_agent(percept,action): given the current percept, this procedure
-%                 should return an appropriate action, which is then
-%                 executed.
-%
-% This is what should be fleshed out
+:- dynamic agent_x/1, agent_y/1, agent_ang/1, agent_arrow/1, agent_gold/1, breeze/3, stench/3, glitter/3, bump/3, scream/1, visited/2, shotAt/2.
 
-:- dynamic agent_x/1, agent_y/1, agent_ang/1, agent_arrow/1, agent_gold/1, breeze/3, stench/3, glitter/3, bump/3, scream/3.
+square(1,1).
+square(1,2).
+square(1,3).
+square(1,4).
 
+square(2,1).
+square(2,2).
+square(2,3).
+square(2,4).
+
+square(3,1).
+square(3,2).
+square(3,3).
+square(3,4).
+
+square(4,1).
+square(4,2).
+square(4,3).
+square(4,4).
+
+%===============================================
+%INTERFACE RULES
+%===============================================
 
 init_agent:-
 	retractall(agent_x(_)),
@@ -24,9 +36,9 @@ init_agent:-
 	retractall(stench(_,_,_)),
 	retractall(glitter(_,_,_)),
 	retractall(bump(_,_,_)),
-	retractall(scream(_,_,_)),
-
-
+	retractall(scream(_)),
+  retractall(visited(_,_)),
+  retractall(shotAt(_,_)),
 
 	assert(agent_x(1)),
 	assert(agent_y(1)),
@@ -34,16 +46,11 @@ init_agent:-
 	assert(agent_ang(0)),
 	assert(agent_arrow(1)).
 
-
-%run_agent(Percept,Action):-
-%run_agent(_,_):-
-%	format('\nomg\n').
-%   Percept = [Stench,Breeze,Glitter,Bump,Scream]
-%             The five parameters are either 'yes' or 'no'.
-
 run_agent(Percept, Action):-
 
 	agent_x(X), agent_y(Y), agent_ang(A),
+
+  assert(visited(X,Y)),
 
 	format('Im at: ~d ~d, angle ~d\n',[X,Y,A]),
 
@@ -53,28 +60,39 @@ run_agent(Percept, Action):-
 
 	update_position(Action),
 
-	
-
-	%format('I think Im at ~d, ~d\n',X,Y),
 	display_world.
-	
+
+%===============================================
+%GET ACTION RULES
+%===============================================
 
 get_action(grab):-
 	agent_x(X), agent_y(Y), glitter(yes,X,Y).
 
-get_action(climb):-
-	agent_x(X), agent_y(Y), agent_gold(G),
-	X == 1, Y == 1, G > 0.
-
 get_action(shoot):-
-	\+scream(yes,_,_), %no scream yet anywhere. Wumpus is still around!
+	\+scream(yes), %no scream yet anywhere. Wumpus is still around!
 	agent_arrow(Ar),
 	Ar > 0,
-	format('maybeshoot?\n'),
-	agent_x(X), agent_y(Y), stench(yes,X,Y), format('asdf').
+  %if wumpus is definitely ahead of where we're facing, shoot it!
+  findall([Xw,Yw], (square(Xw,Yw), possible_wumpus_location(Xw,Yw)), Dwls),
+  length(Dwls, 1), %we know of only one possible wumpus location.
+  nth0(0, Dwls, Dwl),
+  nth0(0, Dwl, Xdw), nth0(1, Dwl, Ydw),
+  facing(Xdw, Ydw) ;
+  %else, if we've been everywhere, better shoot at one of its possible spots that we're facing.
+  
+  explored_all(yes),
+  findall([Xw,Yw], (square(Xw,Yw), possible_wumpus_location(Xw,Yw), facing(Xw, Yw)), Dwls),
+  length(Dwls, Len), %better have at least one
+  Len > 0.
+
+get_action(climb):-
+	agent_x(X), agent_y(Y), agent_gold(G),
+  (explored_all(yes) ; G > 0), %either we've been everywhere or we have 1 gold
+  X =:= 1, Y =:= 1. %make sure we've been everywhere possible and at 1 1 now.
 
 get_action(goforward):-
-	random(10) > 4,
+  random(10) > 4,
 	agent_x(X), agent_y(Y), agent_ang(A),
 
 	NewX is X + round(cos((A/360)*(pi*2))),
@@ -82,60 +100,69 @@ get_action(goforward):-
 
 	safe(NewX, NewY),  format('it is!\n'), valid(NewX,NewY), format('it is!\n').
 
-get_action(turnleft):- random(10) > 4. % random(2) returns 0 or 1.
-get_action(turnright):- true.
+get_action(turnleft):- true.
+%get_action(turnright):- true. never turn right... slightly wasteful
+
+%===============================================
+%HELPER RULES
+%===============================================
+
+explored_all(yes):-
+  findall([Xu, Yu], (square(Xu, Yu), \+visited(Xu,Yu), square(Xo, Yo), visited(Xo, Yo), neighbor(Xo, Yo, Xu, Yu), \+possible_wumpus_location(Xu,Yu), \+possible_pit_location(Xu,Yu)), Unvisited),
+  %still safe squares to visit?! Don't leave  yet!
+  length(Unvisited, Len), 
+  Len =:= 0.
+
+explored_all(no).
+
+facing(Xt,Yt):-
+  agent_x(X), agent_y(Y), agent_ang(A),
+    (X =:= Xt, Y =\= Yt,
+    ShouldDir is (Yt - Y) / abs(Yt - Y),
+    IsDir is round(sin((A/360)*(pi*2))),
+    IsDir =:= ShouldDir
+   ;
+  
+    Y =:= Yt, X =\= Xt,
+    ShouldDir is (Xt - X) / abs(Xt - X),
+    IsDir is round(cos((A/360)*(pi*2))),
+    IsDir =:= ShouldDir).
+
+possible_wumpus_location(Xw, Yw):-
+  \+scream(yes), %no scream so far. If there has been scream, can't be wumpus.
+  \+shotAt(Xw, Yw), %not shot at this square. If we have, he must be dead.
+  \+visited(Xw,Yw),
+  findall([Xn, Yn], (square(Xn, Yn), neighbor(Xw, Yw, Xn, Yn), stench(yes, Xn, Yn)), Nyes), %findall neighbors with stenches
+  findall([Xnn, Ynn], (square(Xnn, Ynn), neighbor(Xw, Yw, Xnn, Ynn), stench(no, Xnn, Ynn)), Nno), %findall neighbors without
+  length(Nyes, LenYes),
+  length(Nno, LenNo),
+  LenYes > 0,
+  LenNo < 1.
+
+possible_pit_location(Xw, Yw):-
+  \+visited(Xw, Yw),
+  findall([Xn, Yn], (square(Xn, Yn), neighbor(Xw, Yw, Xn, Yn), breeze(yes, Xn, Yn)), Nyes), %findall neighbors with stenches
+  findall([Xnn, Ynn], (square(Xnn, Ynn), neighbor(Xw, Yw, Xnn, Ynn), breeze(no, Xnn, Ynn)), Nno), %findall neighbors without
+  length(Nyes, LenYes),
+  length(Nno, LenNo),
+  LenYes > 0,
+  LenNo < 1.
+
+neighbor(X,Y,Xn,Yn):-
+  abs(X-Xn) =:= 1, Y =:= Yn ;
+  abs(Y-Yn) =:= 1, X =:= Xn.
 
 safe(X,Y):-
+  valid(X,Y),
 	format('Is ~d, ~d safe?\n', [X,Y]),
-	safe_breeze(X,Y),
-	safe_stench(X,Y).
-	
+  \+possible_wumpus_location(X,Y),
+  \+possible_pit_location(X,Y).
 
-safe_breeze(X,Y):-
-	format('Is ~d, ~d breeze-safe?\n', [X,Y]),
-	X1 is X + 1,
-	X0 is X - 1,
-	Y1 is Y + 1,
-	Y0 is Y - 1,
-	(
-		( breeze(no,X1,Y) ;
-		breeze(no,X0,Y) ;
-		breeze(no,X,Y1) ;
-		breeze(no,X,Y0) )
-		;
-		breeze(_,X,Y) %its safe if there's no breeze neighboring it or if we already know if there's a breeze there or not.
-	).
+valid(X,Y):- square(X,Y).
 
-safe_stench(X,Y):-
-	format('Is ~d, ~d stench-safe?\n', [X,Y]),
-	X1 is X + 1,
-	X0 is X - 1,
-	Y1 is Y + 1,
-	Y0 is Y - 1,
-	(
-		( stench(no,X1,Y) ;
-		stench(no,X0,Y) ;
-		stench(no,X,Y1) ;
-		stench(no,X,Y0) )
-		;
-		stench(_,X,Y) %its safe if there's no stench neighboring it or if we already know if there's a stench there or not.
-		;
-		scream(yes,_,_) % OR if the wumpus is dead :)
-	).
-
-/*
-neighbor(X,Y, List):-
-	valid(X+1, Y) -> List is [[X+1,Y]|List],
-	valid(X-1, Y) -> List is [[X-1,Y]|List],
-	valid(X, Y+1) -> List is [[X,Y+1]|List],
-	valid(X, Y-1) -> List is [[X,Y-1]|List].
-
-neighbor(X,Y, []):-
-	neighbor(X,Y,[[X+1,Y]]).
-*/
-valid(X,Y):-
-	format('valid checking ~d ~d \n',[X,Y]),
-	X > 0, X < 5, Y > 0, Y < 5.
+%===============================================
+%UPDATE PERCEPT RULE
+%===============================================
 
 update_percepts([Stench,Breeze,Glitter,Bump,Scream]):-
 	format('[~a,~a,~a,~a,~a]',[Stench,Breeze,Glitter,Bump,Scream]),
@@ -152,23 +179,11 @@ update_percepts([Stench,Breeze,Glitter,Bump,Scream]):-
 	assert(breeze(Breeze,X,Y)),
 	assert(glitter(Glitter,X,Y)),
 	assert(bump(Bump,X,Y)),
-	assert(scream(Scream,X,Y)).
+	assert(scream(Scream)).
 
-%------------------------------------------------------------------------
-% execute(Action,Percept): executes Action and returns Percept
-%
-%   Action is one of:
-%     goforward: move one square along current orientation if possible
-%     turnleft:  turn left 90 degrees
-%     turnright: turn right 90 degreesS
-%     grab:      pickup gold if in square
-%     shoot:     shoot an arrow along orientation, killing wumpus if
-%                in that direction
-%     climb:     if in square 1,1, leaves the cave and adds 1000 points
-%                for each piece of gold
-%
-%   Percept = [Stench,Breeze,Glitter,Bump,Scream]
-%             The five parameters are either 'yes' or 'no'.
+%===============================================
+%UPDATE POSITION RULES
+%===============================================
 
 update_position(climb):-
 	true.
@@ -176,7 +191,8 @@ update_position(climb):-
 update_position(shoot):-
 	retract(agent_arrow(Ar)),
 	NewAr is Ar-1,
-	assert(agent_arrow(NewAr)).
+	assert(agent_arrow(NewAr)),
+  foreach((square(Xs, Ys), facing(Xs, Ys)), assert(shotAt(Xs, Ys))). %marked these squares that we shot at
 
 update_position(grab):-
 	retract(agent_gold(G)),
@@ -197,10 +213,10 @@ update_position(goforward):-
 	agent_ang(A),
 
 	retract(agent_x(X)),
-  	retract(agent_y(Y)),
+  retract(agent_y(Y)),
 
 	NewX is X + round(cos((A/360)*(pi*2))),
 	NewY is Y + round(sin((A/360)*(pi*2))),
 
 	assert(agent_x(NewX)), 
-  	assert(agent_y(NewY)).
+  assert(agent_y(NewY)).
